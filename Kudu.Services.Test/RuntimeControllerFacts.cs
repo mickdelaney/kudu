@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq;
@@ -15,6 +16,8 @@ namespace Kudu.Services.Test
     {
         private static readonly string _programFilesDir = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         private static readonly string _nodeDir = Path.Combine(_programFilesDir, "nodejs");
+        private static readonly string _phpDir = Path.Combine(_programFilesDir, "PHP");
+        private static readonly string _javaDir = Path.Combine(_programFilesDir, "Java");
 
         [Fact]
         public void RuntimeControllerReturnsEmptyListIfDirectoryDoesNotExist()
@@ -27,13 +30,12 @@ namespace Kudu.Services.Test
             var fileSystem = new Mock<IFileSystem>();
             fileSystem.Setup(f => f.DirectoryInfo).Returns(directory.Object);
             FileSystemHelpers.Instance = fileSystem.Object;
-            var controller = new RuntimeController(Mock.Of<ITracer>());
 
             // Act
-            var runtimeInfo = controller.GetRuntimeVersions();
+            var nodeVersions = RuntimeController.GetNodeVersions();
 
             // Assert
-            Assert.Empty(runtimeInfo.NodeVersions);
+            Assert.Empty(nodeVersions);
         }
 
         [Fact]
@@ -54,14 +56,109 @@ namespace Kudu.Services.Test
             var fileSystem = new Mock<IFileSystem>();
             fileSystem.Setup(f => f.DirectoryInfo).Returns(directoryInfo.Object);
             FileSystemHelpers.Instance = fileSystem.Object;
-            var controller = new RuntimeController(Mock.Of<ITracer>());
 
             // Act
-            var nodeVersions = controller.GetRuntimeVersions().NodeVersions.ToList();
+            var nodeVersions = RuntimeController.GetNodeVersions();
 
             // Assert
-            Assert.Equal(new[] { "0.8.19", "0.10.5", "0.10.18" }, nodeVersions.Select(v => v["version"]));
-            Assert.Equal(new[] { "1.2.8", "1.3.11", null }, nodeVersions.Select(v => v["npm"]));
+            Assert.Equal(new[] { "0.8.19", "0.10.5", "0.10.18" }, nodeVersions);
+        }
+
+        [Fact]
+        public void RuntimeControllerReturnsNetFrameworkVersions()
+        {
+            // Act
+            var clrVersions = RuntimeController.GetNetFrameworkVersions();
+
+            // Assert
+            Assert.Equal(new[] { "v2.0", "v4.0" }, clrVersions);
+        }
+
+        [Fact]
+        public void RuntimeControllerReturnsPhpVersions()
+        {
+            var phpDir = new Mock<DirectoryInfoBase>();
+            phpDir.Setup(d => d.Exists).Returns(true);
+            phpDir.Setup(d => d.GetDirectories()).Returns(new[] { 
+                CreateDirectory("v5.3"), 
+                CreateDirectory("v5.4"), 
+                CreateDirectory("v5.5"),
+                CreateDirectory("v1.Foo"), 
+                CreateDirectory("vBar") 
+            });
+            var directoryInfo = new Mock<IDirectoryInfoFactory>();
+            directoryInfo.Setup(d => d.FromDirectoryName(_phpDir)).Returns(phpDir.Object);
+            var fileSystem = new Mock<IFileSystem>();
+            fileSystem.Setup(f => f.DirectoryInfo).Returns(directoryInfo.Object);
+            FileSystemHelpers.Instance = fileSystem.Object;
+
+            // Act
+            var phpVersions = RuntimeController.GetPhpVersions();
+
+            // Assert
+            Assert.Equal(new[] { String.Empty, "5.3", "5.4", "5.5" }, phpVersions);
+        }
+
+        [Fact]
+        public void RuntimeControllerReturnsJavaVersions()
+        {
+            var javaDir = new Mock<DirectoryInfoBase>();
+            javaDir.Setup(d => d.Exists).Returns(true);
+            javaDir.Setup(d => d.GetDirectories()).Returns(new[] { 
+                CreateDirectory("jdk1.7.0_51"), 
+                CreateDirectory("v5.5"),
+                CreateDirectory("jdk1.Foo"),
+                CreateDirectory("jdkBar")
+            });
+            var directoryInfo = new Mock<IDirectoryInfoFactory>();
+            directoryInfo.Setup(d => d.FromDirectoryName(_javaDir)).Returns(javaDir.Object);
+            var fileSystem = new Mock<IFileSystem>();
+            fileSystem.Setup(f => f.DirectoryInfo).Returns(directoryInfo.Object);
+            FileSystemHelpers.Instance = fileSystem.Object;
+
+            // Act
+            var javaVersions = RuntimeController.GetJavaVersions();
+
+            // Assert
+            Assert.Equal(new[] { String.Empty, "1.7.0_51" }, javaVersions);
+        }
+
+        [Fact]
+        public void RuntimeControllerReturnsJavaContainerVersions()
+        {
+            var javaDir = new Mock<DirectoryInfoBase>();
+            javaDir.Setup(d => d.Exists).Returns(true);
+            javaDir.Setup(d => d.GetDirectories()).Returns(new[] { 
+                CreateDirectory("apache-tomcat-7.0.50"), 
+                CreateDirectory("apache-tomcat-7.0.51"), 
+                CreateDirectory("jetty-distribution-9.1.0.v20131115"),
+                CreateDirectory("jetty-distribution-9.2.0.v20140312")
+            });
+            javaDir.Setup(d => d.GetDirectories(It.IsAny<string>())).Returns<string>(searchPattern => 
+            {
+                var filter = searchPattern.Replace("*", String.Empty);
+                var results = new List<DirectoryInfoBase>();
+                foreach (var dir in javaDir.Object.GetDirectories())
+                {
+                    if (dir.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        results.Add(dir);
+                    }
+                }
+                return results.ToArray();
+            });
+            var directoryInfo = new Mock<IDirectoryInfoFactory>();
+            directoryInfo.Setup(d => d.FromDirectoryName(_programFilesDir)).Returns(javaDir.Object);
+            var fileSystem = new Mock<IFileSystem>();
+            fileSystem.Setup(f => f.DirectoryInfo).Returns(directoryInfo.Object);
+            FileSystemHelpers.Instance = fileSystem.Object;
+
+            // Act
+            var javaContainerVersions = RuntimeController.GetJavaContainerVersions();
+
+            // Assert
+            Assert.Equal(new[] { "7.0.50", "7.0.51" }, javaContainerVersions["Tomcat"]);
+            Assert.Equal(new[] { "9.1.0.20131115", "9.2.0.20140312" }, javaContainerVersions["Jetty"]);
         }
 
         private DirectoryInfoBase CreateDirectory(string name, params FileInfoBase[] files)
