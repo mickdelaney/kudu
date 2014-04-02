@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Web.Hosting;
+using Kudu.Core.Infrastructure;
 
 namespace Kudu.Services.Web
 {
@@ -10,7 +11,8 @@ namespace Kudu.Services.Web
         {
             // The HOME path should always be set correctly
             string path = Environment.ExpandEnvironmentVariables(@"%HOME%");
-            if (Directory.Exists(path))
+
+            if (FileSystemHelpers.DirectoryExists(path))
             {
                 // For users running Windows Azure Pack 2 (WAP2), %HOME% actually points to the site folder,
                 // which we don't want here. So yank that segment if we detect it.

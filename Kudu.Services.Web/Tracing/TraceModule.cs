@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Web;
 using Kudu.Contracts.Tracing;
@@ -11,10 +12,15 @@ namespace Kudu.Services.Web.Tracing
 {
     public class TraceModule : IHttpModule
     {
+        public const string SwapTemp = "SwapTemp";
+
         private static readonly DateTime _startDateTime = DateTime.UtcNow;
         private static readonly object _stepKey = new object();
         private static int _traceStartup;
         private static DateTime _lastRequestDateTime;
+
+        private static readonly object _thisLock = new object();
+        private static string _host;
 
         public static TimeSpan UpTime
         {
@@ -39,6 +45,11 @@ namespace Kudu.Services.Web.Tracing
 
             var httpContext = ((HttpApplication)sender).Context;
             var httpRequest = new HttpRequestWrapper(httpContext.Request);
+
+            // Swap settings, this is done once per host
+            // This is a convenient place since it is called on every request
+            // and Host header info is available.
+            SwapSettings(httpRequest.Headers["HOST"]);
 
             // HACK: If it's a Razor extension, add a dummy extension to prevent WebPages for blocking it,
             // as we need to serve those files via /vfs
@@ -207,6 +218,35 @@ namespace Kudu.Services.Web.Tracing
                 System.Threading.Thread.CurrentThread.ManagedThreadId));
 
             return attribs;
+        }
+
+        public static void SwapSettings(string host)
+        {
+            if (!String.Equals(host, _host, StringComparison.OrdinalIgnoreCase))
+            {
+                lock (_thisLock)
+                {
+                    if (!String.Equals(host, _host, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string hostPrefix = host.Split('.')[0];
+                        string rootPath = PathResolver.ResolveRootPath();
+                        string swapTempPath = Path.Combine(rootPath, SwapTemp);
+                        if (FileSystemHelpers.DirectoryExists(swapTempPath))
+                        {
+                            string hostSwapTempPath = Path.Combine(swapTempPath, hostPrefix);
+                            if (FileSystemHelpers.DirectoryExists(hostSwapTempPath))
+                            {
+                                // recursive copy from /swaptemp/hostname/* -> /*
+                                FileSystemHelpers.CopyDirectoryRecursive(hostSwapTempPath, rootPath, overwrite: true);
+                            }
+
+                            FileSystemHelpers.DeleteDirectorySafe(swapTempPath);
+                        }
+
+                        _host = host;
+                    }
+                }
+            }
         }
 
         public void Dispose()
