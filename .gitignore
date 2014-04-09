@@ -23,3 +23,6 @@ _app/
 *.ncrunchsolution
 nuget.exe
 Kudu.Services.Web/commit.txt
+Kudu.Services.Web/Scripts/*
+*.js.map
+ProcessExplorer.js
