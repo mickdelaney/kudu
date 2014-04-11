@@ -117,6 +117,16 @@ namespace Kudu.FunctionalTests
                     }
                 }
 
+                //Test Handles
+                process = await appManager.ProcessManager.GetCurrentProcessAsync();
+                Assert.NotNull(process);
+                Assert.True(process.OpenFileHandles.Any(h => h.ToLower().Contains("kudu.core.dll")));
+
+                //Test Modules
+                process = await appManager.ProcessManager.GetCurrentProcessAsync();
+                Assert.NotNull(process);
+                Assert.True(process.Modules.Any(h => h.FileName.Equals("ntdll.dll")));
+
                 // Test kill process
                 await KuduAssert.ThrowsUnwrappedAsync<HttpRequestException>(() => appManager.ProcessManager.KillProcessAsync(currentId));
                 HttpUtils.WaitForSite(appManager.SiteUrl, delayBeforeRetry: 10000);

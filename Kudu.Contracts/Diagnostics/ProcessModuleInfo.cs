@@ -16,13 +16,13 @@ namespace Kudu.Core.Diagnostics
         [DataMember(Name = "href", EmitDefaultValue = false)]
         public Uri Href { get; set; }
 
-        [DataMember(Name = "file_path")]
+        [DataMember(Name = "file_path", EmitDefaultValue = false)]
         public string FilePath { get; set; }
 
         [DataMember(Name = "module_memory_size", EmitDefaultValue = false)]
         public int ModuleMemorySize { get; set; }
 
-        [DataMember(Name = "file_version", EmitDefaultValue = false)]
+        [DataMember(Name = "file_version")]
         public string FileVersion { get; set; }
 
         [DataMember(Name = "file_description", EmitDefaultValue = false)]
